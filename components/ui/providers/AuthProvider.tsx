@@ -1,73 +1,70 @@
-"use client";
-
-import { createContext, useContext, useEffect, useState } from "react";
-import { 
-  signInWithPopup,     // ← BACK TO POPUP
+'use client';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import {
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
-  User 
-} from "firebase/auth";
-import { auth } from "@/firebase";
+  User,
+} from 'firebase/auth';
+import { auth } from '@/firebase';
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
   loading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
-}
+};
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  login: async () => {},
-  logout: async () => {}
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const provider = new GoogleAuthProvider();
+
+  useEffect(() => {
+    setIsMobile(/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent));
+  }, []);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      getRedirectResult(auth).catch(console.error);
+    }
+  }, [isMobile]);
 
   const login = async () => {
-    console.log("🚀 Login clicked!");
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: 'select_account'  // Fix mobile account selection
-      });
-      const result = await signInWithPopup(auth, provider);  // ← POPUP
-      console.log("✅ Popup login success:", result.user.email);
-    } catch (error: any) {
-      console.error("❌ Login error:", error.code, error.message);
-      if (error.code === 'auth/popup-closed-by-user') {
-        console.log("User closed popup - normal");
-      }
-    }
+    if (isMobile) await signInWithRedirect(auth, provider);
+    else await signInWithPopup(auth, provider);
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("❌ Logout failed:", error);
-    }
+    await signOut(auth);
   };
-
-  useEffect(() => {
-    console.log("🔍 AuthProvider init");
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("👤 User state:", user?.email || "null");
-      setUser(user);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within <AuthProvider>');
+  }
+  return ctx;
+};
