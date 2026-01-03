@@ -2,8 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { 
-  signInWithRedirect, 
-  getRedirectResult, 
+  signInWithPopup,     // ← BACK TO POPUP
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
@@ -33,9 +32,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     console.log("🚀 Login clicked!");
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithRedirect(auth, provider);
-    } catch (error) {
-      console.error("❌ Login failed:", error);
+      provider.setCustomParameters({
+        prompt: 'select_account'  // Fix mobile account selection
+      });
+      const result = await signInWithPopup(auth, provider);  // ← POPUP
+      console.log("✅ Popup login success:", result.user.email);
+    } catch (error: any) {
+      console.error("❌ Login error:", error.code, error.message);
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log("User closed popup - normal");
+      }
     }
   };
 
@@ -48,33 +54,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    console.log("🔍 AuthProvider mounted");
-
-    // 1. Handle redirect FIRST (critical order!)
-    getRedirectResult(auth).then((result) => {
-      console.log("📱 getRedirectResult:", result);
-      if (result?.user) {
-        console.log("✅ Redirect login success:", result.user.email);
-        setUser(result.user);
-      }
-    }).catch((error) => {
-      console.error("❌ Redirect error:", error);
-    });
-
-    // 2. Listen for ALL future auth changes (AFTER redirect handled)
+    console.log("🔍 AuthProvider init");
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("👤 onAuthStateChanged:", user?.email || "null");
+      console.log("👤 User state:", user?.email || "null");
       setUser(user);
       setLoading(false);
     });
-
-    // 3. Initial load complete
-    setTimeout(() => setLoading(false), 1000);
-
-    return () => {
-      console.log("🧹 AuthProvider cleanup");
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   return (
