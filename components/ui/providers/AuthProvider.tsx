@@ -51,19 +51,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Fixed useEffect with BOTH redirect handling AND auth state listener
   useEffect(() => {
-    // 1. Handle redirect result (for mobile login)
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          setUser(result.user);
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect error:", error);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+  console.log("🔍 Checking redirect result...");
+  
+  getRedirectResult(auth)
+    .then((result) => {
+      console.log("📱 Redirect result:", result);
+      if (result?.user) {
+        console.log("✅ User from redirect:", result.user.email);
+        setUser(result.user);
+      } else {
+        console.log("❌ No redirect user");
+      }
+    })
+    .catch((error) => {
+      console.error("❌ Redirect error:", error);
+    })
+    .finally(() => {
+      setLoading(false);
+    });
+
 
     // 2. Listen for auth state changes (for normal logins and keeping user logged in)
     const unsubscribe = onAuthStateChanged(auth, (user) => {
