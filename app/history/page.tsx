@@ -16,12 +16,13 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Trash2, Search, History as HistoryIcon, LogIn } from "lucide-react";
 
+// 1. Updated Type to support both old 'job' and new 'jobPost' fields
 type ProposalDoc = {
   id: string;
-  job: string;
+  jobPost?: string; 
+  job?: string;
   about: string;
   proposal: string;
   createdAt?: any;
@@ -32,14 +33,13 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   
-  // Get user, login, and logout from our Auth Provider
   const { user, login, logout } = useAuth(); 
 
   useEffect(() => {
     if (user) {
       loadHistory();
     } else {
-      setItems([]); // Clear history if logged out
+      setItems([]);
       setLoading(false);
     }
   }, [user]);
@@ -69,6 +69,7 @@ export default function HistoryPage() {
   };
 
   const deleteProposal = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this proposal?")) return;
     try {
       await deleteDoc(doc(db, "proposals", id));
       loadHistory();
@@ -77,9 +78,10 @@ export default function HistoryPage() {
     }
   };
 
+  // 2. Updated handleLoad to use the new 'jobPost' key
   const handleLoad = (item: ProposalDoc) => {
     localStorage.setItem("proposalDraft", JSON.stringify({
-      job: item.job,
+      jobPost: item.jobPost || item.job || "", // Check both for old data compatibility
       about: item.about,
       proposal: item.proposal,
     }));
@@ -92,9 +94,11 @@ export default function HistoryPage() {
     return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const filtered = items.filter(item =>
-    item.job.toLowerCase().includes(search.toLowerCase())
-  );
+  // 3. FIX: Safe filtering that checks both jobPost and job
+  const filtered = items.filter(item => {
+    const title = item.jobPost || item.job || "";
+    return title.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="min-h-screen bg-[#020617] text-white overflow-hidden relative selection:bg-purple-500/30">
@@ -140,7 +144,6 @@ export default function HistoryPage() {
               </div>
             </div>
 
-            {/* DYNAMIC AUTH HEADER */}
             <div className="flex items-center gap-4 ml-4">
               {user ? (
                 <div className="flex items-center gap-4">
@@ -191,8 +194,9 @@ export default function HistoryPage() {
                             <span className="text-[10px] uppercase tracking-widest font-bold text-purple-400/80 bg-purple-500/10 px-2 py-0.5 rounded-md">Proposal</span>
                             <span className="text-[10px] text-white/30 font-medium">{formatDate(item.createdAt)}</span>
                           </div>
+                          {/* 4. Display both old and new field names */}
                           <h3 className="text-lg font-bold text-white/90 truncate group-hover:text-white transition-colors">
-                            {item.job || "Untitled Project"}
+                            {item.jobPost || item.job || "Untitled Project"}
                           </h3>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
