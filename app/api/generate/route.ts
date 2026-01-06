@@ -2,19 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Extract all variables from the request body
+    // 1. Extract variables
     const { jobPost, about, instruction, charLimit, platform, selectedTone } = await req.json();
     
-    // 2. Add validation to prevent empty requests
+    // 2. Validation
     if (!jobPost || !about) {
       return NextResponse.json({ error: "Job post and profile are required." }, { status: 400 });
     }
 
-    // 3. Set defaults for platform and tone
+    // NEW: Truncate jobPost to the first 4000 characters to stay within TPM limits [web:181]
+    const truncatedJobPost = jobPost.substring(0, 4000);
+
+    // 3. Set defaults
     const currentPlatform = platform || "Upwork";
     const currentTone = selectedTone || "Professional";
 
-    // 4. Construct the prompt using the variables
+    // 4. Construct the prompt
     const prompt = `You are an expert ${currentPlatform} freelancer. 
 Analyze the Job Post for: 1. Main Goal, 2. Required Tech, 3. Budget/Timeline.
 
@@ -35,7 +38,8 @@ Style Guide:
         model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: prompt },
-          { role: "user", content: `JOB: ${jobPost}\n\nPROFILE: ${about}` }
+          // Use 'truncatedJobPost' here to avoid TPM rate limit errors [file:200]
+          { role: "user", content: `JOB: ${truncatedJobPost}\n\nPROFILE: ${about}` }
         ],
         max_tokens: 1000, 
         temperature: 0.7,

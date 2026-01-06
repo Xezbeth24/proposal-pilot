@@ -1,32 +1,63 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { collection, addDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 import Link from "next/link";
 import { useAuth } from "../components/ui/providers/AuthProvider";
-import { LogOut, LogIn, Download } from "lucide-react"; 
+import { LogOut, LogIn, Download, Loader2, Link as LinkIcon } from "lucide-react"; 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas-pro';
 import { toast } from 'sonner';
 import { PROPOSAL_TEMPLATES } from "../lib/templates";
 import { MobileMenu } from "../components/ui/MobileMenu";
+// Import Shadcn components
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [jobPost, setJobPost] = useState(""); 
+  const [jobPost, setJobPost] = useState("");
+  const [jobUrl, setJobUrl] = useState(""); 
+  const [isScraping, setIsScraping] = useState(false);
   const [about, setAbout] = useState("");
   const [proposal, setProposal] = useState("");
+  // ... and so on
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [charLimit, setCharLimit] = useState(800); 
-  
-  // 1. ADDED STATES INSIDE COMPONENT
   const [selectedPlatform, setSelectedPlatform] = useState("Upwork");
   const [selectedTone, setSelectedTone] = useState("Professional");
 
   const { user, login, logout, loading: authLoading } = useAuth();
   const [selectedTemplate, setSelectedTemplate] = useState(PROPOSAL_TEMPLATES[1].id);
+
+  // New: Scraping Logic
+  const handleScrape = async () => {
+    if (!jobUrl) return toast.error("Please paste an Upwork or LinkedIn URL first!");
+    
+    setIsScraping(true);
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: jobUrl }),
+      });
+      const data = await res.json();
+      
+      if (data.markdown) {
+        setJobPost(data.markdown); 
+        toast.success("Job details imported successfully!");
+      } else {
+        throw new Error(data.error || "Failed to fetch content");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Scraping failed. Try manual copy-paste.");
+    } finally {
+      setIsScraping(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -105,7 +136,6 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 2. UPDATED GENERATE FUNCTION
   const generateProposal = async () => {
     if (authLoading) return;
     if (!user) return toast.error("Please sign in first!");
@@ -123,8 +153,8 @@ export default function Home() {
           about, 
           instruction: templateInstructions, 
           charLimit,
-          platform: selectedPlatform, // New field
-          selectedTone: selectedTone    // New field
+          platform: selectedPlatform,
+          selectedTone: selectedTone
         }),
       });
 
@@ -142,6 +172,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-purple-950/80 to-slate-800 overflow-hidden relative">
+      {/* Animated Background Gradients */}
       <div className="absolute inset-0 opacity-20 pointer-events-none">
         <div className="absolute top-20 left-20 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 left-1/2 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
@@ -160,7 +191,6 @@ export default function Home() {
             <Link href="/history" className="group flex items-center gap-3 px-4 py-3 rounded-2xl text-white/60 hover:bg-white/10 transition-all">📜 History</Link>
           </nav>
 
-          {/* 3. ADDED PLATFORM TOGGLE */}
           <div className="px-6 mt-6">
             <label className="text-[10px] uppercase font-black text-white/40 mb-2 block tracking-widest">Target Platform</label>
             <div className="grid grid-cols-2 gap-2 bg-black/40 p-1 rounded-xl border border-white/5">
@@ -176,7 +206,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 4. ADDED TONE SELECTOR */}
           <div className="px-6 mt-4">
             <label className="text-[10px] uppercase font-black text-white/40 mb-2 block tracking-widest">Proposal Tone</label>
             <select 
@@ -216,7 +245,33 @@ export default function Home() {
           <div className="flex-1 p-8 flex flex-col lg:flex-row gap-8 overflow-hidden">
             <section className="lg:w-1/2 space-y-6 flex flex-col overflow-y-auto pr-2">
               <div className="backdrop-blur-xl bg-white/5 border border-purple-900/50 p-8 rounded-3xl shadow-2xl">
-                <h2 className="text-2xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-3">🎯 Job Details</h2>
+                <h2 className="text-2xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">🎯 Job Details</h2>
+                
+                {/* NEW: URL Scraping Section */}
+                <div className="flex w-full items-center space-x-2 mb-6">
+                  <div className="relative flex-1">
+                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+                    <Input 
+                      type="url" 
+                      placeholder="Paste Upwork or LinkedIn link..." 
+                      value={jobUrl}
+                      onChange={(e) => setJobUrl(e.target.value)}
+                      className="pl-11 bg-black/40 border-white/20 text-white h-12 rounded-2xl focus:ring-purple-500"
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleScrape} 
+                    disabled={isScraping}
+                    className="h-12 px-6 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all"
+                  >
+                    {isScraping ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Fetching</>
+                    ) : (
+                      "Auto-Fill"
+                    )}
+                  </Button>
+                </div>
+
                 <textarea 
                   className="w-full h-44 p-6 rounded-2xl bg-black/40 border border-white/20 text-white placeholder-white/40 focus:ring-4 focus:ring-purple-500/30 outline-none" 
                   placeholder="Paste FULL job description..." 
