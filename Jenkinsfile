@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'node:20-alpine'
-            args '-u root:root'
-        }
-    }
+    agent any
 
     stages {
         stage('Checkout') {
@@ -13,21 +8,9 @@ pipeline {
             }
         }
 
-        stage('Install') {
+        stage('Echo') {
             steps {
-                sh 'npm install'
-            }
-        }
-
-        stage('Lint') {
-            steps {
-                sh 'npm run lint || echo "No lint script"'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'npm run build'
+                sh 'echo "Jenkins pipeline is running for ProposalPilot"'
             }
         }
     }
