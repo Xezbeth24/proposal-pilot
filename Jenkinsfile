@@ -16,10 +16,20 @@ pipeline {
             }
         }
         
-        stage('Check Node & NPM') {
+        stage('Install Node.js') {
             steps {
-                echo "🔍 Checking Node.js availability..."
-                sh 'node --version && npm --version || echo "Node.js not found, skipping version check"'
+                echo "📑 Installing Node.js and npm..."
+                sh '''
+                    if ! command -v npm &> /dev/null; then
+                        echo "Installing Node.js via apt..."
+                        apt-get update
+                        apt-get install -y curl gnupg2 lsb-release ca-certificates
+                        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - || true
+                        apt-get install -y nodejs || (curl -L https://nodejs.org/dist/latest-v18.x/node-v18.17.0-linux-x64.tar.xz | tar xJ -C /usr/local --strip-components=1) || true
+                    fi
+                    node --version
+                    npm --version
+                '''
             }
         }
         
