@@ -5,8 +5,7 @@ pipeline {
         NODE_ENV = 'production'
         DOCKER_IMAGE = 'proposalpilot-nextjs'
         DOCKER_TAG = "${BUILD_NUMBER}"
-        REGISTRY = 'docker.io'  // Change to your Docker Hub username
-        REGISTRY_CREDENTIALS = 'docker-hub-credentials'  // Jenkins credentials ID
+        DOCKER_USERNAME = 'xzebeth'
     }
     
     stages {
@@ -18,6 +17,12 @@ pipeline {
         }
         
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "📦 Installing Node.js dependencies..."
                 sh 'npm install'
@@ -25,23 +30,41 @@ pipeline {
         }
         
         stage('Lint & Code Quality') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "🔍 Running linting checks..."
-                sh 'npm run lint || true'  // Continue even if linting has warnings
+                sh 'npm run lint || true'
             }
         }
         
         stage('Build') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
             steps {
-                echo "🏗️  Building Next.js application..."
+                echo "🏗️ Building Next.js application..."
                 sh 'npm run build'
             }
         }
         
         stage('Test') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "🧪 Running unit tests..."
-                sh 'npm test -- --coverage --watchAll=false || true'  // Continue even if no tests
+                sh 'npm test -- --coverage --watchAll=false || true'
             }
         }
         
@@ -52,24 +75,21 @@ pipeline {
                     docker build \
                         -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
                         -t ${DOCKER_IMAGE}:latest \
+                        -t ${DOCKER_USERNAME}/${DOCKER_IMAGE}:${DOCKER_TAG} \
+                        -t ${DOCKER_USERNAME}/${DOCKER_IMAGE}:latest \
                         .
                 '''
             }
         }
         
-        stage('Push to Registry') {
-            when {
-                branch 'main'  // Only push on main branch
-            }
+        stage('Push to Docker Hub') {
             steps {
                 echo "📤 Pushing Docker image to registry..."
-                withCredentials([usernamePassword(credentialsId: env.REGISTRY_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
-                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin ${REGISTRY}
-                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${REGISTRY}/${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
-                        docker tag ${DOCKER_IMAGE}:latest ${REGISTRY}/${DOCKER_USER}/${DOCKER_IMAGE}:latest
-                        docker push ${REGISTRY}/${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
-                        docker push ${REGISTRY}/${DOCKER_USER}/${DOCKER_IMAGE}:latest
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE}:latest
                         docker logout
                     '''
                 }
@@ -77,43 +97,30 @@ pipeline {
         }
         
         stage('Deploy to Local') {
-            when {
-                branch 'main'
-            }
             steps {
-                echo "🚀 Deploying Docker container locally..."
+                echo "🚀 Deploying application..."
                 sh '''
-                    # Stop old container if running
-                    docker stop proposalpilot || true
-                    docker rm proposalpilot || true
-                    
-                    # Start new container
+                    docker stop proposalpilot-container 2>/dev/null || true
+                    docker rm proposalpilot-container 2>/dev/null || true
                     docker run -d \
-                        --name proposalpilot \
+                        --name proposalpilot-container \
                         -p 3000:3000 \
-                        ${DOCKER_IMAGE}:latest
-                    
-                    sleep 5
-                    docker ps -a | grep proposalpilot
+                        ${DOCKER_USERNAME}/${DOCKER_IMAGE}:latest
                 '''
             }
         }
     }
     
     post {
-        always {
-            echo "✅ Pipeline completed!"
-        }
         success {
-            echo "🎉 Pipeline successful! App deployed."
-            // Add Slack/email notification here
+            echo "✅ Pipeline completed successfully!"
+            echo "🎉 Application is running at http://localhost:3000"
         }
         failure {
             echo "❌ Pipeline failed! Check logs above."
-            // Add Slack/email notification here
         }
-        cleanup {
-            cleanWs()  // Clean workspace after build
+        always {
+            cleanWs()
         }
     }
 }
